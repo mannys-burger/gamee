@@ -22,13 +22,12 @@ import {
    Project settings → General → "Your apps" → SDK setup and config).
    --------------------------------------------------------------------- */
 const firebaseConfig = {
-  apiKey: "AIzaSyDGRnET-TywbBmoegYR2EK5t2KsrPr31k8",
-  authDomain: "mannys-burger.firebaseapp.com",
-  projectId: "mannys-burger",
-  storageBucket: "mannys-burger.firebasestorage.app",
-  messagingSenderId: "364862596575",
-  appId: "1:364862596575:web:ff3fd9cc94cf0a6061906a",
-  measurementId: "G-X5LGLXLM5W"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID",
 };
 
 const app = initializeApp(firebaseConfig);
@@ -49,7 +48,7 @@ const POINTS_PER_CATCH = 10;
 // Fastest an ingredient can ever fall/spawn once max difficulty is
 // reached (seconds between spawns at the difficulty ceiling).
 // Must match MIN_SPAWN_INTERVAL in game.js.
-const MIN_SPAWN_INTERVAL_SEC = 0.45;
+const MIN_SPAWN_INTERVAL_SEC = 0.28;
 
 // A generous multiplier so we never punish a genuinely great human
 // player — only reject scores that are wildly beyond physical reach

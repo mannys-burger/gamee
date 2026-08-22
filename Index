@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>Manny's Burger — Catch & Win</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============================================================
+       SCREEN 1 — REGISTRATION
+       ============================================================ -->
+  <section id="screen-register" class="screen active">
+    <div class="reg-card">
+      <img src="assets/logo.png" alt="Manny's Burger" class="reg-logo" />
+      <h1 class="reg-title">Catch the <span class="accent">Burger</span></h1>
+      <p class="reg-sub">Build the tallest burger before the buzzer beats you. Top score of the week eats free.</p>
+
+      <form id="registerForm" autocomplete="off">
+        <label class="field">
+          <span>Full Name</span>
+          <input type="text" id="playerName" name="playerName" placeholder="e.g. Manny Ibrahim" required maxlength="40" />
+        </label>
+
+        <label class="field">
+          <span>Phone Number</span>
+          <input type="tel" id="playerPhone" name="playerPhone" placeholder="e.g. 010 1234 5678" required maxlength="20" />
+        </label>
+
+        <button type="submit" id="startBtn" class="btn-primary">Start Game</button>
+      </form>
+
+      <button id="viewLeaderboardBtn" class="btn-ghost">View Leaderboard</button>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SCREEN 2 — GAME
+       ============================================================ -->
+  <section id="screen-game" class="screen">
+    <div id="hud">
+      <div class="hud-pill">
+        <span class="hud-label">Score</span>
+        <span id="scoreValue">0</span>
+      </div>
+      <div class="hud-pill">
+        <span class="hud-label">Player</span>
+        <span id="hudPlayerName">—</span>
+      </div>
+      <button id="quitBtn" class="btn-quit" aria-label="Quit game">✕</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="comboToast" class="combo-toast">+10</div>
+  </section>
+
+  <!-- ============================================================
+       SCREEN 3 — GAME OVER / SCORE SUBMITTED
+       ============================================================ -->
+  <section id="screen-gameover" class="screen">
+    <div class="reg-card">
+      <h1 class="reg-title">Nice <span class="accent">Stack!</span></h1>
+      <p class="reg-sub">Your final score</p>
+      <div id="finalScore" class="final-score">0</div>
+      <p id="submitStatus" class="submit-status">Saving your score…</p>
+
+      <button id="playAgainBtn" class="btn-primary">Play Again</button>
+      <button id="goLeaderboardBtn" class="btn-ghost">See Leaderboard</button>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       LEADERBOARD OVERLAY (usable from any screen)
+       ============================================================ -->
+  <div id="leaderboardOverlay" class="overlay">
+    <div class="leaderboard-card">
+      <div class="leaderboard-header">
+        <h2>Top 5 — <span class="accent">Leaderboard</span></h2>
+        <button id="closeLeaderboardBtn" class="btn-close" aria-label="Close leaderboard">✕</button>
+      </div>
+      <ol id="leaderboardList" class="leaderboard-list">
+        <!-- populated live by firebase.js -->
+        <li class="lb-empty">Loading scores…</li>
+      </ol>
+      <p class="leaderboard-footnote">Highest score of the promo period wins a free meal at Manny's Burger.</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- Firebase v9 modular SDK (ES module) + game modules -->
+<script type="module" src="firebase.js"></script>
+<script type="module" src="game.js"></script>
+</body>
+</html>

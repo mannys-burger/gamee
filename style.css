@@ -254,6 +254,25 @@ html, body {
   white-space: nowrap;
 }
 
+.hearts {
+  display: flex;
+  gap: 3px;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.heart {
+  color: var(--gold);
+  text-shadow: 0 1px 4px rgba(242, 183, 5, 0.4);
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.heart.lost {
+  color: #3a3a3f;
+  text-shadow: none;
+  transform: scale(0.85);
+}
+
 .btn-quit {
   margin-left: auto;
   width: 34px;

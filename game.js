@@ -95,10 +95,15 @@ let assetsReady = false;
 function loadImage(key, src) {
   return new Promise((resolve) => {
     const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null); // fall back to a drawn placeholder if missing
+    img.onload = () => {
+      images[key] = img; // only register the image if it actually loaded
+      resolve(img);
+    };
+    img.onerror = () => {
+      // leave images[key] unset so drawing code falls back to a drawn placeholder
+      resolve(null);
+    };
     img.src = src;
-    images[key] = img;
   });
 }
 

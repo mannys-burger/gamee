@@ -21,15 +21,16 @@ import {
    Replace with your actual project credentials (Firebase console →
    Project settings → General → "Your apps" → SDK setup and config).
    --------------------------------------------------------------------- */
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID",
+  apiKey: "AIzaSyDGRnET-TywbBmoegYR2EK5t2KsrPr31k8",
+  authDomain: "mannys-burger.firebaseapp.com",
+  projectId: "mannys-burger",
+  storageBucket: "mannys-burger.firebasestorage.app",
+  messagingSenderId: "364862596575",
+  appId: "1:364862596575:web:ff3fd9cc94cf0a6061906a",
+  measurementId: "G-X5LGLXLM5W"
 };
-
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 

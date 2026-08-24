@@ -119,6 +119,7 @@ const state = {
   endTime: 0,
   ingredients: [],
   particles: [],
+  currentBurger: [], // إضافة لتتبع البرجر الحالي
   spawnTimer: 0,
   lastFrameTime: 0,
   trayFlash: 0,
@@ -282,9 +283,6 @@ function checkPhaseProgress(newScore) {
   const newStage = Math.floor(newScore / STAGE_SCORE);
   if (newStage > state.currentStage) {
     state.currentStage = newStage;
-    if (newStage % INGREDIENT_TYPES.length === 0) {
-      setTimeout(clearSideStack, 500);
-    }
     triggerPhasePause(newStage);
   }
 }
@@ -296,8 +294,19 @@ function triggerPhasePause(stageIndex) {
 
   if (phaseOverlayEl) {
     if (phaseTitleEl) phaseTitleEl.textContent = `المرحلة ${stageIndex + 1}!`;
-    if (phaseSubEl) phaseSubEl.textContent = `استعد لتجميع: ${ingredientName}`;
+    if (phaseSubEl) phaseSubEl.textContent = `استعد لتجميع: ${ingredientName} (المس الشاشة للمتابعة)`;
     phaseOverlayEl.classList.add("active");
+
+    // تفعيل اللمس للمتابعة على الشاشة بالكامل
+    const handleTap = (e) => {
+      e.preventDefault();
+      resumeGameFromPhase();
+      phaseOverlayEl.removeEventListener("click", handleTap);
+      phaseOverlayEl.removeEventListener("touchstart", handleTap);
+    };
+    phaseOverlayEl.addEventListener("click", handleTap);
+    phaseOverlayEl.addEventListener("touchstart", handleTap, { passive: false });
+
   } else {
     setTimeout(resumeGameFromPhase, 1200);
   }
@@ -409,7 +418,21 @@ function updateIngredients(dt) {
       scoreValueEl.textContent = state.score;
       state.trayFlash = 1;
 
-      addIngredientToSideStack(item.type);
+      // منطق إضافة مكونات البرجر (واحدة فقط من كل نوع)
+      if (!state.currentBurger.includes(item.type)) {
+        state.currentBurger.push(item.type);
+        addIngredientToSideStack(item.type);
+
+        // لو كمل البرجر كله (7 مكونات)
+        if (state.currentBurger.length === INGREDIENT_TYPES.length) {
+          state.score += 50; // نقط بونص
+          scoreValueEl.textContent = state.score;
+          showComboToast(rect.width / 2, rect.height * 0.4, "برجر كامل! +50");
+          state.currentBurger = []; // تصفير عشان يبدأ برجر جديد
+          setTimeout(clearSideStack, 600); // تنظيف الرصة الجانبية
+        }
+      }
+
       showComboToast(item.x + item.size / 2, state.tray.y - 10, "+10");
       spawnCatchParticles(item.x + item.size / 2, item.y + item.size / 2);
 
@@ -641,11 +664,11 @@ function gameLoop(timestamp) {
 }
 
 /* ---------------------------------------------------------------------
-   12. SCREEN TRANSITIONS
+   12. SCREEN TRANSITIONS & ERROR HANDLING FIX
    --------------------------------------------------------------------- */
 function showScreen(name) {
   Object.values(screens).forEach((el) => el.classList.remove("active"));
-  screens[name].classList.add("active");
+  if (screens[name]) screens[name].classList.add("active");
 }
 
 function startGame() {
@@ -655,6 +678,7 @@ function startGame() {
   state.isPaused = false;
   state.ingredients = [];
   state.particles = [];
+  state.currentBurger = []; // تصفير البرجر الحالي مع بداية اللعبة
   state.spawnTimer = 0;
   state.lastFrameTime = 0;
   state.startTime = Date.now();
@@ -686,23 +710,30 @@ async function endGame(reason = "quit") {
   finalScoreEl.textContent = state.score;
   submitStatusEl.textContent = "جاري حفظ النتيجة…";
   submitStatusEl.className = "submit-status";
-  showScreen("gameover");
+  showScreen("gameover"); // العرض الفوري عشان الشاشة متوقفش
 
-  const result = await submitScore({
-    name: state.player.name,
-    phone: state.player.phone,
-    score: state.score,
-    startTime: state.startTime,
-    endTime: state.endTime,
-  });
+  // تأمين الكود في حالة وجود مشكلة في الفايربيز
+  try {
+    const result = await submitScore({
+      name: state.player.name,
+      phone: state.player.phone,
+      score: state.score,
+      startTime: state.startTime,
+      endTime: state.endTime,
+    });
 
-  if (result.ok) {
-    submitStatusEl.textContent = "تم حفظ النتيجة بنجاح!";
-    submitStatusEl.className = "submit-status ok";
-  } else if (result.reason === "implausible_score") {
-    submitStatusEl.textContent = "تعذر التحقق من النتيجة ولم يتم حفظها.";
-    submitStatusEl.className = "submit-status error";
-  } else {
+    if (result && result.ok) {
+      submitStatusEl.textContent = "تم حفظ النتيجة بنجاح!";
+      submitStatusEl.className = "submit-status ok";
+    } else if (result && result.reason === "implausible_score") {
+      submitStatusEl.textContent = "تعذر التحقق من النتيجة ولم يتم حفظها.";
+      submitStatusEl.className = "submit-status error";
+    } else {
+      submitStatusEl.textContent = "تعذر حفظ النتيجة — يرجى التأكد من الاتصال بالإنترنت.";
+      submitStatusEl.className = "submit-status error";
+    }
+  } catch (error) {
+    console.error("Firebase submit error:", error);
     submitStatusEl.textContent = "تعذر حفظ النتيجة — يرجى التأكد من الاتصال بالإنترنت.";
     submitStatusEl.className = "submit-status error";
   }

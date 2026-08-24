@@ -19,7 +19,8 @@
       <h1 class="reg-title">Catch the <span class="accent">Burger</span></h1>
       <p class="reg-sub">Build the tallest burger without dropping ingredients. Top score wins!</p>
 
-      <form id="registerForm" autocomplete="off">
+      <!-- إضافة onsubmit لمنع الصفحة من عمل ريفرش عند الضغط على الزر -->
+      <form id="registerForm" autocomplete="off" onsubmit="event.preventDefault();">
         <label class="field">
           <span>Full Name</span>
           <input type="text" id="playerName" name="playerName" placeholder="e.g. Manny Ibrahim" required maxlength="40" />
@@ -47,7 +48,7 @@
         <span id="scoreValue">0</span>
       </div>
       
-      <!-- نظام القلوب الجديد -->
+      <!-- نظام القلوب -->
       <div class="hud-pill">
         <span class="hud-label">Lives</span>
         <div class="hearts" id="livesContainer">
@@ -76,9 +77,10 @@
        ============================================================ -->
   <div id="phaseOverlay" class="phase-overlay">
     <h2 id="phaseTitle" class="reg-title">Awesome!</h2>
-    <p id="phaseDesc" class="reg-sub">You unlocked a new ingredient.</p>
+    <!-- توحيد الـ IDs لتطابق أوامر game.js -->
+    <p id="phaseSub" class="reg-sub">You unlocked a new ingredient.</p>
     <div id="phaseIngredientPreview" class="ingredient-preview"></div>
-    <button id="resumeBtn" class="btn-primary">Continue Challenge</button>
+    <button id="resumePhaseBtn" class="btn-primary">Continue Challenge</button>
   </div>
 
   <!-- ============================================================

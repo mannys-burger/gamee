@@ -1,22 +1,18 @@
 /* =====================================================================
-   MANNY'S BURGER — game.js
+   MANNY'S BURGER — game.js (Full Version with Phase & Stack Upgrades)
    Canvas game loop, physics, input handling, progressive difficulty,
-   staged ingredient reveal, miss-based lose condition, and screen flow.
-   Talks to firebase.js for leaderboard + score submit.
+   staged ingredient reveal, heart-based miss system, side-stack visualizer,
+   phase pause screens, and complete Firebase integration.
    ===================================================================== */
 
 import { listenTopScores, submitScore, submitScoreOnExit } from "./firebase.js";
 
 /* ---------------------------------------------------------------------
    0. ASSET PLACEHOLDERS
-   Swap these paths for your real art. Keep the keys the same.
-   If a file is missing, the game draws a themed placeholder shape
-   instead (see drawIngredientFallback / drawTray), so it's always
-   playable even before real art is added.
    --------------------------------------------------------------------- */
 const ASSET_PATHS = {
-  background: "assets/background.png", // full-bleed black/gold/white pattern
-  tray: "assets/tray.png",              // wooden table-style catcher
+  background: "assets/background.png",
+  tray: "assets/tray.png",
   bunBottom: "assets/bun_bottom.png",
   lettuce: "assets/lettuce.png",
   tomato: "assets/tomato.png",
@@ -29,27 +25,42 @@ const ASSET_PATHS = {
 // The order the burger gets "built" as the score climbs.
 const INGREDIENT_TYPES = ["bunBottom", "lettuce", "tomato", "onion", "cheese", "patty", "bunTop"];
 
+const INGREDIENT_NAMES = {
+  bunBottom: "الخبز السفلي 🍞",
+  lettuce: "الخس الطازج 🥬",
+  tomato: "الطماطم 🍅",
+  onion: "البصل 🧅",
+  cheese: "الجبنة الذائبة 🧀",
+  patty: "برجر اللحم 🥩",
+  bunTop: "الخبز العلوي 🍔"
+};
+
+const STACK_CSS_CLASSES = {
+  bunBottom: "bg-bun-bottom",
+  lettuce: "bg-lettuce",
+  tomato: "bg-tomato",
+  onion: "bg-onion",
+  cheese: "bg-cheese",
+  patty: "bg-patty",
+  bunTop: "bg-bun-top"
+};
+
 /* ---------------------------------------------------------------------
    1. DIFFICULTY & PROGRESSION TUNING
-   NOTE: MIN_SPAWN_INTERVAL here mirrors MIN_SPAWN_INTERVAL_SEC in
-   firebase.js — keep them in sync so anti-cheat math matches reality.
    --------------------------------------------------------------------- */
 const POINTS_PER_CATCH = 10;
-const MAX_MISSES = 3; // miss this many ingredients and it's game over
+const MAX_MISSES = 3; // 3 hearts maximum
 
-const BASE_SPAWN_INTERVAL = 0.9;    // seconds between spawns at score 0 (was 1.15 — starts faster now)
-const MIN_SPAWN_INTERVAL = 0.28;    // fastest possible spawn rate (matches firebase.js)
-const SPAWN_RAMP = 0.006;           // spawn interval reduction per point scored (was 0.0035 — ramps up quicker)
+const BASE_SPAWN_INTERVAL = 0.9;    // seconds between spawns at score 0
+const MIN_SPAWN_INTERVAL = 0.28;    // fastest possible spawn rate
+const SPAWN_RAMP = 0.006;           // spawn interval reduction per point scored
 
-const BASE_FALL_SPEED = 220;        // px/sec at score 0 (was 160)
-const MAX_FALL_SPEED = 900;         // px/sec ceiling (was 620)
-const FALL_RAMP = 1.5;              // px/sec added per point scored (was 0.9)
+const BASE_FALL_SPEED = 220;        // px/sec at score 0
+const MAX_FALL_SPEED = 900;         // px/sec ceiling
+const FALL_RAMP = 1.5;              // px/sec added per point scored
 
-// Every STAGE_SCORE points, the falling ingredient advances to the next
-// one in INGREDIENT_TYPES — bread first, then lettuce, then tomato, etc.
-// Once the whole burger has appeared, it switches to a random mix so
-// the endless late-game stays varied.
-const STAGE_SCORE = 400;
+// Phase updates every 300 points
+const STAGE_SCORE = 300;
 
 /* ---------------------------------------------------------------------
    2. DOM REFERENCES
@@ -73,6 +84,15 @@ const quitBtn = document.getElementById("quitBtn");
 const comboToastEl = document.getElementById("comboToast");
 const missesHeartsEl = document.getElementById("missesHearts");
 
+// Side panel stack reference
+const burgerStackEl = document.getElementById("burgerStack");
+
+// Phase Overlay UI References
+const phaseOverlayEl = document.getElementById("phaseOverlay");
+const phaseTitleEl = document.getElementById("phaseTitle");
+const phaseSubEl = document.getElementById("phaseSub");
+const resumePhaseBtn = document.getElementById("resumePhaseBtn");
+
 const gameoverTitleEl = document.getElementById("gameoverTitle");
 const gameoverSubEl = document.getElementById("gameoverSub");
 const finalScoreEl = document.getElementById("finalScore");
@@ -92,31 +112,32 @@ const state = {
   player: { name: "", phone: "" },
   score: 0,
   misses: 0,
+  currentStage: 0,
   running: false,
+  isPaused: false,
   startTime: 0,
   endTime: 0,
   ingredients: [],
   particles: [],
   spawnTimer: 0,
   lastFrameTime: 0,
-  trayFlash: 0, // 0..1, decays after a catch — used for a quick highlight pulse
+  trayFlash: 0,
   tray: { x: 0, y: 0, w: 0, h: 0, targetX: 0 },
 };
 
 const images = {};
 
 /* ---------------------------------------------------------------------
-   4. ASSET LOADING (graceful placeholder fallback)
+   4. ASSET LOADING
    --------------------------------------------------------------------- */
 function loadImage(key, src) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
-      images[key] = img; // only register the image if it actually loaded
+      images[key] = img;
       resolve(img);
     };
     img.onerror = () => {
-      // leave images[key] unset so drawing code falls back to a drawn placeholder
       resolve(null);
     };
     img.src = src;
@@ -129,7 +150,7 @@ async function preloadAssets() {
 }
 
 /* ---------------------------------------------------------------------
-   5. CANVAS SIZING (mobile-first, DPR aware)
+   5. CANVAS SIZING
    --------------------------------------------------------------------- */
 let dpr = Math.min(window.devicePixelRatio || 1, 2);
 
@@ -140,12 +161,11 @@ function resizeCanvas() {
   canvas.height = Math.round(rect.height * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  // Re-anchor the tray on resize
   const w = rect.width;
   const h = rect.height;
-  state.tray.w = Math.min(108, w * 0.28); // smaller catch zone than before (was 130 / 0.34) — harder to line up
-  state.tray.h = state.tray.w * 0.22; // flatter proportions read as a tabletop
-  state.tray.y = h - state.tray.h - 34; // leave room below for "table legs"
+  state.tray.w = Math.min(108, w * 0.28);
+  state.tray.h = state.tray.w * 0.22;
+  state.tray.y = h - state.tray.h - 34;
   if (state.tray.x === 0) {
     state.tray.x = w / 2 - state.tray.w / 2;
     state.tray.targetX = state.tray.x;
@@ -156,7 +176,7 @@ window.addEventListener("resize", resizeCanvas);
 window.addEventListener("orientationchange", () => setTimeout(resizeCanvas, 200));
 
 /* ---------------------------------------------------------------------
-   6. INPUT — touch drag, mouse drag, arrow keys
+   6. INPUT HANDLING
    --------------------------------------------------------------------- */
 function clampTrayX(x) {
   const rect = canvas.getBoundingClientRect();
@@ -197,7 +217,7 @@ window.addEventListener("mousemove", (e) => {
 });
 window.addEventListener("mouseup", () => (mouseDown = false));
 
-const KEY_SPEED = 480; // px/sec for keyboard control
+const KEY_SPEED = 480;
 const keys = { left: false, right: false };
 window.addEventListener("keydown", (e) => {
   if (e.key === "ArrowLeft") keys.left = true;
@@ -209,7 +229,7 @@ window.addEventListener("keyup", (e) => {
 });
 
 /* ---------------------------------------------------------------------
-   7. SPAWNING, DIFFICULTY & STAGE PROGRESSION
+   7. SPAWNING, DIFFICULTY & PHASE PROGRESSION
    --------------------------------------------------------------------- */
 function currentSpawnInterval() {
   return Math.max(MIN_SPAWN_INTERVAL, BASE_SPAWN_INTERVAL - state.score * SPAWN_RAMP);
@@ -219,8 +239,6 @@ function currentFallSpeed() {
   return Math.min(MAX_FALL_SPEED, BASE_FALL_SPEED + state.score * FALL_RAMP);
 }
 
-// Bread first, then lettuce, then tomato... every STAGE_SCORE points.
-// Once the full burger has appeared once, mix all ingredients randomly.
 function currentIngredientType() {
   const stageIndex = Math.floor(state.score / STAGE_SCORE);
   if (stageIndex < INGREDIENT_TYPES.length) {
@@ -246,7 +264,57 @@ function spawnIngredient() {
 }
 
 /* ---------------------------------------------------------------------
-   8. PARTICLES (small celebratory burst on every catch)
+   8. SIDE PANEL STACK & PHASE OVERLAY LOGIC
+   --------------------------------------------------------------------- */
+function addIngredientToSideStack(type) {
+  if (!burgerStackEl) return;
+  const item = document.createElement("div");
+  const cssClass = STACK_CSS_CLASSES[type] || "bg-bun-bottom";
+  item.className = `stack-item ${cssClass}`;
+  burgerStackEl.appendChild(item);
+}
+
+function clearSideStack() {
+  if (burgerStackEl) burgerStackEl.innerHTML = "";
+}
+
+function checkPhaseProgress(newScore) {
+  const newStage = Math.floor(newScore / STAGE_SCORE);
+  if (newStage > state.currentStage) {
+    state.currentStage = newStage;
+    if (newStage % INGREDIENT_TYPES.length === 0) {
+      setTimeout(clearSideStack, 500);
+    }
+    triggerPhasePause(newStage);
+  }
+}
+
+function triggerPhasePause(stageIndex) {
+  state.isPaused = true;
+  const ingredientKey = INGREDIENT_TYPES[stageIndex % INGREDIENT_TYPES.length];
+  const ingredientName = INGREDIENT_NAMES[ingredientKey] || "مكون جديد";
+
+  if (phaseOverlayEl) {
+    if (phaseTitleEl) phaseTitleEl.textContent = `المرحلة ${stageIndex + 1}!`;
+    if (phaseSubEl) phaseSubEl.textContent = `استعد لتجميع: ${ingredientName}`;
+    phaseOverlayEl.classList.add("active");
+  } else {
+    setTimeout(resumeGameFromPhase, 1200);
+  }
+}
+
+function resumeGameFromPhase() {
+  if (phaseOverlayEl) phaseOverlayEl.classList.remove("active");
+  state.isPaused = false;
+  state.lastFrameTime = performance.now();
+}
+
+if (resumePhaseBtn) {
+  resumePhaseBtn.addEventListener("click", resumeGameFromPhase);
+}
+
+/* ---------------------------------------------------------------------
+   9. PARTICLES
    --------------------------------------------------------------------- */
 function spawnCatchParticles(x, y) {
   const colors = ["#f2b705", "#ffffff", "#d99a00"];
@@ -274,7 +342,7 @@ function updateParticles(dt) {
       state.particles.splice(i, 1);
       continue;
     }
-    p.vy += 260 * dt; // gravity
+    p.vy += 260 * dt;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
   }
@@ -293,7 +361,7 @@ function drawParticles() {
 }
 
 /* ---------------------------------------------------------------------
-   9. GAME LOOP HELPERS
+   10. GAME LOOP HELPERS
    --------------------------------------------------------------------- */
 function updateTray(dt) {
   if (keys.left) state.tray.targetX = clampTrayX(state.tray.targetX - KEY_SPEED * dt);
@@ -310,11 +378,12 @@ function rectsOverlap(a, b) {
 }
 
 function showComboToast(x, y, text = "+10") {
+  if (!comboToastEl) return;
   comboToastEl.textContent = text;
   comboToastEl.style.left = `${x}px`;
   comboToastEl.style.top = `${y}px`;
   comboToastEl.classList.remove("show");
-  void comboToastEl.offsetWidth; // restart animation on rapid catches
+  void comboToastEl.offsetWidth;
   comboToastEl.classList.add("show");
 }
 
@@ -339,6 +408,8 @@ function updateIngredients(dt) {
       state.score += POINTS_PER_CATCH;
       scoreValueEl.textContent = state.score;
       state.trayFlash = 1;
+
+      addIngredientToSideStack(item.type);
       showComboToast(item.x + item.size / 2, state.tray.y - 10, "+10");
       spawnCatchParticles(item.x + item.size / 2, item.y + item.size / 2);
 
@@ -346,11 +417,13 @@ function updateIngredients(dt) {
         showComboToast(rect.width / 2, rect.height * 0.32, `🔥 ${state.score}`);
       }
 
+      checkPhaseProgress(state.score);
+
       state.ingredients.splice(i, 1);
       continue;
     }
 
-    // Missed — counts toward the 3-miss lose condition, endless otherwise
+    // Missed — 3-miss lose condition
     if (item.y > rect.height + item.size) {
       state.ingredients.splice(i, 1);
       state.misses += 1;
@@ -364,7 +437,7 @@ function updateIngredients(dt) {
 }
 
 /* ---------------------------------------------------------------------
-   10. DRAWING
+   11. DRAWING
    --------------------------------------------------------------------- */
 function drawBackground() {
   const rect = canvas.getBoundingClientRect();
@@ -372,7 +445,6 @@ function drawBackground() {
     ctx.drawImage(images.background, 0, 0, rect.width, rect.height);
     return;
   }
-  // Themed fallback: black base + soft gold vignette so it never looks flat/empty
   ctx.fillStyle = "#0b0b0c";
   ctx.fillRect(0, 0, rect.width, rect.height);
 
@@ -386,8 +458,6 @@ function drawBackground() {
   ctx.fillRect(0, 0, rect.width, rect.height);
 }
 
-// Draws a simple wooden "table" when no tray.png is provided:
-// a flat tabletop with two short legs underneath.
 function drawTray() {
   const t = state.tray;
   const rect = canvas.getBoundingClientRect();
@@ -401,12 +471,10 @@ function drawTray() {
   const legHeight = Math.max(14, rect.height - (t.y + t.h) - 4);
   const legY = t.y + t.h;
 
-  // Legs
   ctx.fillStyle = "#5c3a1a";
   ctx.fillRect(t.x + t.w * 0.08, legY, legWidth, legHeight);
   ctx.fillRect(t.x + t.w * 0.92 - legWidth, legY, legWidth, legHeight);
 
-  // Tabletop — glow pulse right after a catch
   const glow = state.trayFlash;
   ctx.fillStyle = "#a9691f";
   ctx.strokeStyle = glow > 0 ? "#ffe27a" : "#f2b705";
@@ -416,7 +484,6 @@ function drawTray() {
   ctx.fill();
   ctx.stroke();
 
-  // Plank lines for a bit of wood texture
   ctx.strokeStyle = "rgba(0,0,0,0.18)";
   ctx.lineWidth = 1;
   const planks = 4;
@@ -429,8 +496,6 @@ function drawTray() {
   }
 }
 
-// Distinct placeholder shape per ingredient so the game reads clearly
-// even before real art is dropped into assets/.
 function drawIngredientFallback(type, size) {
   const r = size / 2;
   switch (type) {
@@ -544,6 +609,12 @@ function drawIngredients() {
 function gameLoop(timestamp) {
   if (!state.running) return;
 
+  if (state.isPaused) {
+    state.lastFrameTime = timestamp;
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
   if (!state.lastFrameTime) state.lastFrameTime = timestamp;
   const dt = Math.min(0.05, (timestamp - state.lastFrameTime) / 1000);
   state.lastFrameTime = timestamp;
@@ -556,7 +627,7 @@ function gameLoop(timestamp) {
 
   updateTray(dt);
   updateIngredients(dt);
-  if (!state.running) return; // updateIngredients may have ended the game via misses
+  if (!state.running) return;
   updateParticles(dt);
 
   const rect = canvas.getBoundingClientRect();
@@ -570,7 +641,7 @@ function gameLoop(timestamp) {
 }
 
 /* ---------------------------------------------------------------------
-   11. SCREEN TRANSITIONS
+   12. SCREEN TRANSITIONS
    --------------------------------------------------------------------- */
 function showScreen(name) {
   Object.values(screens).forEach((el) => el.classList.remove("active"));
@@ -580,6 +651,8 @@ function showScreen(name) {
 function startGame() {
   state.score = 0;
   state.misses = 0;
+  state.currentStage = 0;
+  state.isPaused = false;
   state.ingredients = [];
   state.particles = [];
   state.spawnTimer = 0;
@@ -590,6 +663,7 @@ function startGame() {
   scoreValueEl.textContent = "0";
   hudPlayerNameEl.textContent = state.player.name;
   updateMissesHUD();
+  clearSideStack();
 
   showScreen("game");
   resizeCanvas();
@@ -603,14 +677,14 @@ async function endGame(reason = "quit") {
 
   if (reason === "missed") {
     gameoverTitleEl.innerHTML = `Game <span class="accent">Over!</span>`;
-    gameoverSubEl.textContent = "You dropped 3 ingredients — here's your final score";
+    gameoverSubEl.textContent = "لقد خسرت الـ 3 قلوب — وهذه هي النتيجة النهائية";
   } else {
     gameoverTitleEl.innerHTML = `Nice <span class="accent">Stack!</span>`;
-    gameoverSubEl.textContent = "Your final score";
+    gameoverSubEl.textContent = "نتيجة اللعب النهائية";
   }
 
   finalScoreEl.textContent = state.score;
-  submitStatusEl.textContent = "Saving your score…";
+  submitStatusEl.textContent = "جاري حفظ النتيجة…";
   submitStatusEl.className = "submit-status";
   showScreen("gameover");
 
@@ -623,19 +697,17 @@ async function endGame(reason = "quit") {
   });
 
   if (result.ok) {
-    submitStatusEl.textContent = "Score saved! Good luck on the leaderboard.";
+    submitStatusEl.textContent = "تم حفظ النتيجة بنجاح!";
     submitStatusEl.className = "submit-status ok";
   } else if (result.reason === "implausible_score") {
-    submitStatusEl.textContent = "Score couldn't be verified and wasn't saved.";
+    submitStatusEl.textContent = "تعذر التحقق من النتيجة ولم يتم حفظها.";
     submitStatusEl.className = "submit-status error";
   } else {
-    submitStatusEl.textContent = "Couldn't save your score — check your connection.";
+    submitStatusEl.textContent = "تعذر حفظ النتيجة — يرجى التأكد من الاتصال بالإنترنت.";
     submitStatusEl.className = "submit-status error";
   }
 }
 
-/* Best-effort save if the player closes the tab / backgrounds the app
-   instead of tapping Quit or losing. Can't await here, so fire-and-forget. */
 function handleUnexpectedExit() {
   if (!state.running) return;
   state.running = false;
@@ -656,7 +728,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 /* ---------------------------------------------------------------------
-   12. LEADERBOARD RENDERING
+   13. LEADERBOARD RENDERING
    --------------------------------------------------------------------- */
 function maskPhone(phone) {
   if (!phone || phone.length < 4) return phone || "";
@@ -667,7 +739,7 @@ function renderLeaderboard(scores) {
   leaderboardList.innerHTML = "";
 
   if (!scores || scores.length === 0) {
-    leaderboardList.innerHTML = `<li class="lb-empty">No scores yet — be the first!</li>`;
+    leaderboardList.innerHTML = `<li class="lb-empty">لا توجد نتائج بعد — كن أول المتصدرين!</li>`;
     return;
   }
 
@@ -695,7 +767,7 @@ function escapeHtml(str) {
 listenTopScores(renderLeaderboard);
 
 /* ---------------------------------------------------------------------
-   13. UI EVENT WIRING
+   14. UI EVENT WIRING
    --------------------------------------------------------------------- */
 registerForm.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -730,7 +802,7 @@ closeLeaderboardBtn.addEventListener("click", () => {
 });
 
 /* ---------------------------------------------------------------------
-   14. BOOT
+   15. BOOT
    --------------------------------------------------------------------- */
 (async function boot() {
   showScreen("register");

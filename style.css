@@ -481,3 +481,53 @@ html, body {
     border-right: 1px solid rgba(242, 183, 5, 0.15);
   }
 }
+/* ============================================================
+   NEW GAME FEATURES STYLES (ADD TO BOTTOM OF YOUR FILE)
+   ============================================================ */
+
+/* 1. Game HUD Updates (Score & Lives pills) */
+#hud {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 5;
+  display: flex; align-items: center; gap: 10px; padding: calc(12px + env(safe-area-inset-top)) 14px 12px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%); pointer-events: none;
+}
+.hud-pill {
+  background: rgba(11, 11, 12, 0.7); border: 1px solid rgba(242, 183, 5, 0.3);
+  border-radius: 999px; padding: 7px 14px; display: flex; flex-direction: column; backdrop-filter: blur(6px);
+}
+.hud-label { font-size: 0.6rem; text-transform: uppercase; color: var(--gold, #f2b705); font-weight: 700; }
+
+/* 2. Hearts UI */
+.hearts { display: flex; gap: 3px; font-size: 0.95rem; }
+.heart { transition: opacity 0.2s, transform 0.2s; }
+.heart.lost { filter: grayscale(100%); opacity: 0.3; transform: scale(0.8); }
+
+/* 3. Left Panel (Burger Stack side view) */
+.left-panel {
+  position: absolute; left: 10px; bottom: 50px; width: 60px;
+  background: rgba(11, 11, 12, 0.6); border: 1px solid rgba(242, 183, 5, 0.2);
+  border-radius: 12px; padding: 10px 5px; display: flex;
+  flex-direction: column-reverse; align-items: center; gap: 2px; z-index: 4;
+  backdrop-filter: blur(4px);
+}
+.burger-stack { display: flex; flex-direction: column-reverse; gap: 2px; align-items: center; width: 100%; }
+.stack-item { width: 45px; height: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.5); animation: popIn 0.3s ease-out; }
+
+/* 4. Ingredient Colors & Shapes */
+.bg-bun-bottom { background: #d99a00; border-radius: 4px 4px 10px 10px; height: 18px; }
+.bg-lettuce { background: #4caf50; border-radius: 4px; height: 8px; width: 50px;}
+.bg-tomato { background: #f44336; border-radius: 6px; height: 12px; width: 40px;}
+.bg-patty { background: #5d4037; border-radius: 8px; height: 16px; width: 48px;}
+.bg-bun-top { background: #d99a00; border-radius: 20px 20px 4px 4px; height: 22px; width: 50px;}
+.bg-hardcore { background: linear-gradient(90deg, #f2b705, #e2483d); border-radius: 5px; height: 15px;}
+
+@keyframes popIn { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+
+/* 5. Phase Overlay (Screen between ingredients) */
+.phase-overlay {
+  position: absolute; inset: 0; z-index: 30; background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(5px); display: none; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center; padding: 24px;
+}
+.phase-overlay.active { display: flex; }
+.ingredient-preview { margin: 20px 0; transform: scale(2); box-shadow: 0 4px 10px rgba(0,0,0,0.5); }

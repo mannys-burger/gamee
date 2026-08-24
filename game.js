@@ -1,8 +1,5 @@
 /* =====================================================================
-   MANNY'S BURGER — game.js (Full Version with Phase & Stack Upgrades)
-   Canvas game loop, physics, input handling, progressive difficulty,
-   staged ingredient reveal, heart-based miss system, side-stack visualizer,
-   phase pause screens, and complete Firebase integration.
+   MANNY'S BURGER — game.js (Safe Version with Null Checks)
    ===================================================================== */
 
 import { listenTopScores, submitScore, submitScoreOnExit } from "./firebase.js";
@@ -22,7 +19,6 @@ const ASSET_PATHS = {
   bunTop: "assets/bun_top.png",
 };
 
-// The order the burger gets "built" as the score climbs.
 const INGREDIENT_TYPES = ["bunBottom", "lettuce", "tomato", "onion", "cheese", "patty", "bunTop"];
 
 const INGREDIENT_NAMES = {
@@ -49,21 +45,20 @@ const STACK_CSS_CLASSES = {
    1. DIFFICULTY & PROGRESSION TUNING
    --------------------------------------------------------------------- */
 const POINTS_PER_CATCH = 10;
-const MAX_MISSES = 3; // 3 hearts maximum
+const MAX_MISSES = 3; 
 
-const BASE_SPAWN_INTERVAL = 0.9;    // seconds between spawns at score 0
-const MIN_SPAWN_INTERVAL = 0.28;    // fastest possible spawn rate
-const SPAWN_RAMP = 0.006;           // spawn interval reduction per point scored
+const BASE_SPAWN_INTERVAL = 0.9;
+const MIN_SPAWN_INTERVAL = 0.28;
+const SPAWN_RAMP = 0.006;
 
-const BASE_FALL_SPEED = 220;        // px/sec at score 0
-const MAX_FALL_SPEED = 900;         // px/sec ceiling
-const FALL_RAMP = 1.5;              // px/sec added per point scored
+const BASE_FALL_SPEED = 220;
+const MAX_FALL_SPEED = 900;
+const FALL_RAMP = 1.5;
 
-// Phase updates every 300 points
 const STAGE_SCORE = 300;
 
 /* ---------------------------------------------------------------------
-   2. DOM REFERENCES
+   2. DOM REFERENCES (With Optional Safety)
    --------------------------------------------------------------------- */
 const screens = {
   register: document.getElementById("screen-register"),
@@ -77,17 +72,15 @@ const phoneInput = document.getElementById("playerPhone");
 const startBtn = document.getElementById("startBtn");
 
 const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
+const ctx = canvas ? canvas.getContext("2d") : null;
 const scoreValueEl = document.getElementById("scoreValue");
 const hudPlayerNameEl = document.getElementById("hudPlayerName");
 const quitBtn = document.getElementById("quitBtn");
 const comboToastEl = document.getElementById("comboToast");
 const missesHeartsEl = document.getElementById("livesContainer");
 
-// Side panel stack reference
 const burgerStackEl = document.getElementById("burgerStack");
 
-// Phase Overlay UI References
 const phaseOverlayEl = document.getElementById("phaseOverlay");
 const phaseTitleEl = document.getElementById("phaseTitle");
 const phaseSubEl = document.getElementById("phaseSub");
@@ -119,7 +112,7 @@ const state = {
   endTime: 0,
   ingredients: [],
   particles: [],
-  currentBurger: [], // إضافة لتتبع البرجر الحالي
+  currentBurger: [],
   spawnTimer: 0,
   lastFrameTime: 0,
   trayFlash: 0,
@@ -156,6 +149,7 @@ async function preloadAssets() {
 let dpr = Math.min(window.devicePixelRatio || 1, 2);
 
 function resizeCanvas() {
+  if (!canvas || !ctx) return;
   const rect = canvas.getBoundingClientRect();
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.round(rect.width * dpr);
@@ -180,43 +174,39 @@ window.addEventListener("orientationchange", () => setTimeout(resizeCanvas, 200)
    6. INPUT HANDLING
    --------------------------------------------------------------------- */
 function clampTrayX(x) {
+  if (!canvas) return x;
   const rect = canvas.getBoundingClientRect();
   return Math.max(0, Math.min(rect.width - state.tray.w, x));
 }
 
 function setTrayTargetFromClientX(clientX) {
+  if (!canvas) return;
   const rect = canvas.getBoundingClientRect();
   const localX = clientX - rect.left;
   state.tray.targetX = clampTrayX(localX - state.tray.w / 2);
 }
 
-canvas.addEventListener(
-  "touchstart",
-  (e) => {
+if (canvas) {
+  canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
     setTrayTargetFromClientX(e.touches[0].clientX);
-  },
-  { passive: false }
-);
+  }, { passive: false });
 
-canvas.addEventListener(
-  "touchmove",
-  (e) => {
+  canvas.addEventListener("touchmove", (e) => {
     e.preventDefault();
     setTrayTargetFromClientX(e.touches[0].clientX);
-  },
-  { passive: false }
-);
+  }, { passive: false });
 
-let mouseDown = false;
-canvas.addEventListener("mousedown", (e) => {
-  mouseDown = true;
-  setTrayTargetFromClientX(e.clientX);
-});
-window.addEventListener("mousemove", (e) => {
-  if (mouseDown) setTrayTargetFromClientX(e.clientX);
-});
-window.addEventListener("mouseup", () => (mouseDown = false));
+  let mouseDown = false;
+  canvas.addEventListener("mousedown", (e) => {
+    mouseDown = true;
+    setTrayTargetFromClientX(e.clientX);
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (mouseDown) setTrayTargetFromClientX(e.clientX);
+  });
+  window.addEventListener("mouseup", () => (mouseDown = false));
+}
 
 const KEY_SPEED = 480;
 const keys = { left: false, right: false };
@@ -249,6 +239,7 @@ function currentIngredientType() {
 }
 
 function spawnIngredient() {
+  if (!canvas) return;
   const rect = canvas.getBoundingClientRect();
   const type = currentIngredientType();
   const size = Math.min(58, rect.width * 0.16);
@@ -297,7 +288,6 @@ function triggerPhasePause(stageIndex) {
     if (phaseSubEl) phaseSubEl.textContent = `استعد لتجميع: ${ingredientName} (المس الشاشة للمتابعة)`;
     phaseOverlayEl.classList.add("active");
 
-    // تفعيل اللمس للمتابعة على الشاشة بالكامل
     const handleTap = (e) => {
       e.preventDefault();
       resumeGameFromPhase();
@@ -358,6 +348,7 @@ function updateParticles(dt) {
 }
 
 function drawParticles() {
+  if (!ctx) return;
   for (const p of state.particles) {
     const t = 1 - p.age / p.life;
     ctx.globalAlpha = Math.max(0, t);
@@ -403,6 +394,7 @@ function updateMissesHUD() {
 }
 
 function updateIngredients(dt) {
+  if (!canvas) return;
   const rect = canvas.getBoundingClientRect();
   const trayRect = { x: state.tray.x, y: state.tray.y, w: state.tray.w, h: state.tray.h };
 
@@ -413,23 +405,20 @@ function updateIngredients(dt) {
     const itemRect = { x: item.x, y: item.y, w: item.size, h: item.size };
 
     if (rectsOverlap(itemRect, trayRect)) {
-      // CAUGHT!
       state.score += POINTS_PER_CATCH;
-      scoreValueEl.textContent = state.score;
+      if (scoreValueEl) scoreValueEl.textContent = state.score;
       state.trayFlash = 1;
 
-      // منطق إضافة مكونات البرجر (واحدة فقط من كل نوع)
       if (!state.currentBurger.includes(item.type)) {
         state.currentBurger.push(item.type);
         addIngredientToSideStack(item.type);
 
-        // لو كمل البرجر كله (7 مكونات)
         if (state.currentBurger.length === INGREDIENT_TYPES.length) {
-          state.score += 50; // نقط بونص
-          scoreValueEl.textContent = state.score;
+          state.score += 50;
+          if (scoreValueEl) scoreValueEl.textContent = state.score;
           showComboToast(rect.width / 2, rect.height * 0.4, "برجر كامل! +50");
-          state.currentBurger = []; // تصفير عشان يبدأ برجر جديد
-          setTimeout(clearSideStack, 600); // تنظيف الرصة الجانبية
+          state.currentBurger = [];
+          setTimeout(clearSideStack, 600);
         }
       }
 
@@ -446,7 +435,6 @@ function updateIngredients(dt) {
       continue;
     }
 
-    // Missed — 3-miss lose condition
     if (item.y > rect.height + item.size) {
       state.ingredients.splice(i, 1);
       state.misses += 1;
@@ -463,6 +451,7 @@ function updateIngredients(dt) {
    11. DRAWING
    --------------------------------------------------------------------- */
 function drawBackground() {
+  if (!canvas || !ctx) return;
   const rect = canvas.getBoundingClientRect();
   if (images.background) {
     ctx.drawImage(images.background, 0, 0, rect.width, rect.height);
@@ -482,6 +471,7 @@ function drawBackground() {
 }
 
 function drawTray() {
+  if (!canvas || !ctx) return;
   const t = state.tray;
   const rect = canvas.getBoundingClientRect();
 
@@ -520,6 +510,7 @@ function drawTray() {
 }
 
 function drawIngredientFallback(type, size) {
+  if (!ctx) return;
   const r = size / 2;
   switch (type) {
     case "bunBottom":
@@ -615,6 +606,7 @@ function drawIngredientFallback(type, size) {
 }
 
 function drawIngredients() {
+  if (!ctx) return;
   for (const item of state.ingredients) {
     const img = images[item.type];
     ctx.save();
@@ -653,12 +645,14 @@ function gameLoop(timestamp) {
   if (!state.running) return;
   updateParticles(dt);
 
-  const rect = canvas.getBoundingClientRect();
-  ctx.clearRect(0, 0, rect.width, rect.height);
-  drawBackground();
-  drawParticles();
-  drawIngredients();
-  drawTray();
+  if (canvas && ctx) {
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    drawBackground();
+    drawParticles();
+    drawIngredients();
+    drawTray();
+  }
 
   requestAnimationFrame(gameLoop);
 }
@@ -667,7 +661,9 @@ function gameLoop(timestamp) {
    12. SCREEN TRANSITIONS & ERROR HANDLING FIX
    --------------------------------------------------------------------- */
 function showScreen(name) {
-  Object.values(screens).forEach((el) => el.classList.remove("active"));
+  Object.values(screens).forEach((el) => {
+    if (el) el.classList.remove("active");
+  });
   if (screens[name]) screens[name].classList.add("active");
 }
 
@@ -678,13 +674,13 @@ function startGame() {
   state.isPaused = false;
   state.ingredients = [];
   state.particles = [];
-  state.currentBurger = []; // تصفير البرجر الحالي مع بداية اللعبة
+  state.currentBurger = []; 
   state.spawnTimer = 0;
   state.lastFrameTime = 0;
   state.startTime = Date.now();
   state.running = true;
 
-  scoreValueEl.textContent = "0";
+  if (scoreValueEl) scoreValueEl.textContent = "0";
   if (hudPlayerNameEl) hudPlayerNameEl.textContent = state.player.name;
   updateMissesHUD();
   clearSideStack();
@@ -699,20 +695,27 @@ async function endGame(reason = "quit") {
   state.running = false;
   state.endTime = Date.now();
 
-  if (reason === "missed") {
-    gameoverTitleEl.innerHTML = `Game <span class="accent">Over!</span>`;
-    gameoverSubEl.textContent = "لقد خسرت الـ 3 قلوب — وهذه هي النتيجة النهائية";
-  } else {
-    gameoverTitleEl.innerHTML = `Nice <span class="accent">Stack!</span>`;
-    gameoverSubEl.textContent = "نتيجة اللعب النهائية";
+  if (gameoverTitleEl) {
+    if (reason === "missed") {
+      gameoverTitleEl.innerHTML = `Game <span class="accent">Over!</span>`;
+    } else {
+      gameoverTitleEl.innerHTML = `Nice <span class="accent">Stack!</span>`;
+    }
   }
 
-  finalScoreEl.textContent = state.score;
-  submitStatusEl.textContent = "جاري حفظ النتيجة…";
-  submitStatusEl.className = "submit-status";
-  showScreen("gameover"); // العرض الفوري عشان الشاشة متوقفش
+  if (gameoverSubEl) {
+    gameoverSubEl.textContent = reason === "missed" ? "لقد خسرت الـ 3 قلوب — وهذه هي النتيجة النهائية" : "نتيجة اللعب النهائية";
+  }
 
-  // تأمين الكود في حالة وجود مشكلة في الفايربيز
+  if (finalScoreEl) finalScoreEl.textContent = state.score;
+  
+  if (submitStatusEl) {
+    submitStatusEl.textContent = "جاري حفظ النتيجة…";
+    submitStatusEl.className = "submit-status";
+  }
+  
+  showScreen("gameover"); 
+
   try {
     const result = await submitScore({
       name: state.player.name,
@@ -722,20 +725,24 @@ async function endGame(reason = "quit") {
       endTime: state.endTime,
     });
 
-    if (result && result.ok) {
-      submitStatusEl.textContent = "تم حفظ النتيجة بنجاح!";
-      submitStatusEl.className = "submit-status ok";
-    } else if (result && result.reason === "implausible_score") {
-      submitStatusEl.textContent = "تعذر التحقق من النتيجة ولم يتم حفظها.";
-      submitStatusEl.className = "submit-status error";
-    } else {
-      submitStatusEl.textContent = "تعذر حفظ النتيجة — يرجى التأكد من الاتصال بالإنترنت.";
-      submitStatusEl.className = "submit-status error";
+    if (submitStatusEl) {
+      if (result && result.ok) {
+        submitStatusEl.textContent = "تم حفظ النتيجة بنجاح!";
+        submitStatusEl.className = "submit-status ok";
+      } else if (result && result.reason === "implausible_score") {
+        submitStatusEl.textContent = "تعذر التحقق من النتيجة ولم يتم حفظها.";
+        submitStatusEl.className = "submit-status error";
+      } else {
+        submitStatusEl.textContent = "تعذر حفظ النتيجة — يرجى التأكد من الاتصال بالإنترنت.";
+        submitStatusEl.className = "submit-status error";
+      }
     }
   } catch (error) {
     console.error("Firebase submit error:", error);
-    submitStatusEl.textContent = "تعذر حفظ النتيجة — يرجى التأكد من الاتصال بالإنترنت.";
-    submitStatusEl.className = "submit-status error";
+    if (submitStatusEl) {
+      submitStatusEl.textContent = "تعذر حفظ النتيجة — يرجى التأكد من الاتصال بالإنترنت.";
+      submitStatusEl.className = "submit-status error";
+    }
   }
 }
 
@@ -767,6 +774,7 @@ function maskPhone(phone) {
 }
 
 function renderLeaderboard(scores) {
+  if (!leaderboardList) return;
   leaderboardList.innerHTML = "";
 
   if (!scores || scores.length === 0) {
@@ -800,36 +808,36 @@ listenTopScores(renderLeaderboard);
 /* ---------------------------------------------------------------------
    14. UI EVENT WIRING
    --------------------------------------------------------------------- */
-registerForm.addEventListener("submit", (e) => {
+registerForm?.addEventListener("submit", (e) => {
   e.preventDefault();
-  const name = nameInput.value.trim();
-  const phone = phoneInput.value.trim();
+  const name = nameInput?.value.trim();
+  const phone = phoneInput?.value.trim();
   if (!name || !phone) return;
 
   state.player.name = name;
   state.player.phone = phone;
-  startBtn.disabled = true;
+  if (startBtn) startBtn.disabled = true;
 
   startGame();
-  startBtn.disabled = false;
+  if (startBtn) startBtn.disabled = false;
 });
 
-quitBtn.addEventListener("click", () => endGame("quit"));
+quitBtn?.addEventListener("click", () => endGame("quit"));
 
-playAgainBtn.addEventListener("click", () => {
+playAgainBtn?.addEventListener("click", () => {
   showScreen("register");
 });
 
-goLeaderboardBtn.addEventListener("click", () => {
-  leaderboardOverlay.classList.add("show");
+goLeaderboardBtn?.addEventListener("click", () => {
+  leaderboardOverlay?.classList.add("show");
 });
 
-viewLeaderboardBtn.addEventListener("click", () => {
-  leaderboardOverlay.classList.add("show");
+viewLeaderboardBtn?.addEventListener("click", () => {
+  leaderboardOverlay?.classList.add("show");
 });
 
-closeLeaderboardBtn.addEventListener("click", () => {
-  leaderboardOverlay.classList.remove("show");
+closeLeaderboardBtn?.addEventListener("click", () => {
+  leaderboardOverlay?.classList.remove("show");
 });
 
 /* ---------------------------------------------------------------------

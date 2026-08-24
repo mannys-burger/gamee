@@ -82,7 +82,7 @@ const scoreValueEl = document.getElementById("scoreValue");
 const hudPlayerNameEl = document.getElementById("hudPlayerName");
 const quitBtn = document.getElementById("quitBtn");
 const comboToastEl = document.getElementById("comboToast");
-const missesHeartsEl = document.getElementById("missesHearts");
+const missesHeartsEl = document.getElementById("livesContainer");
 
 // Side panel stack reference
 const burgerStackEl = document.getElementById("burgerStack");
@@ -661,7 +661,7 @@ function startGame() {
   state.running = true;
 
   scoreValueEl.textContent = "0";
-  hudPlayerNameEl.textContent = state.player.name;
+  if (hudPlayerNameEl) hudPlayerNameEl.textContent = state.player.name;
   updateMissesHUD();
   clearSideStack();
 
